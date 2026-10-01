@@ -356,26 +356,32 @@ const calcForwardRate = (spot, rateBase, rateQuote, daysStart, daysEnd, feePerce
 // MARGIN CALL CALCULATIONS
 // ════════════════════════════════════════════
 const calcMarginCall = (notional, fwdRate, spot, direction, marginPct, triggerPct) => {
+    // Dépôt initial calculé sur le notionnel en devise de base
+    const initialDeposit = notional * (marginPct / 100);
     const contractValue = notional * fwdRate;
-    const initialDeposit = contractValue * (marginPct / 100);
-    const marginCallAmt = initialDeposit * (triggerPct / 100);
     
-    // How much can spot move before margin call?
-    // Loss = notional × |spot_new - fwd_rate|
-    // Margin call when loss >= initialDeposit × (1 - triggerPct/100)
-    const buffer = initialDeposit * (1 - triggerPct / 100);
-    const movePerUnit = buffer / notional;
+    // Appel de marge : se déclenche quand le taux s'AMÉLIORE pour le client
+    // Car la banque est exposée si le marché est meilleur que le taux bloqué.
+    // Le client a un gain latent = la banque a une perte latente.
+    // Quand cette perte latente dépasse le seuil (triggerPct% du notionnel), → appel de marge.
     
-    // If buying quote (selling base): loss when spot goes DOWN from fwd_rate
-    // If selling quote (buying base): loss when spot goes UP from fwd_rate
+    // Seuil de déclenchement en devise de base
+    const triggerAmount = notional * (triggerPct / 100);
+    // Mouvement de spot correspondant à ce seuil
+    const movePerUnit = triggerAmount / notional; // = triggerPct / 100
+    
     let mc1Spot, mc2Spot, mc3Spot;
     if (direction === 'buy') {
-        // Client bought at fwdRate. Loses if market spot drops (could have bought cheaper)
+        // Client a acheté Quote (vendu Base) au taux fwdRate.
+        // Le taux s'améliore pour le client si le spot BAISSE (il aurait pu acheter moins cher).
+        // → Appel de marge quand le spot baisse significativement sous le fwdRate.
         mc1Spot = fwdRate - movePerUnit;
         mc2Spot = fwdRate - movePerUnit * 2;
         mc3Spot = fwdRate - movePerUnit * 3;
     } else {
-        // Client sold at fwdRate. Loses if market spot rises (could have sold higher)
+        // Client a vendu Quote (acheté Base) au taux fwdRate.
+        // Le taux s'améliore pour le client si le spot MONTE (il aurait pu vendre plus cher).
+        // → Appel de marge quand le spot monte significativement au-dessus du fwdRate.
         mc1Spot = fwdRate + movePerUnit;
         mc2Spot = fwdRate + movePerUnit * 2;
         mc3Spot = fwdRate + movePerUnit * 3;
@@ -393,7 +399,6 @@ const calcMarginCall = (notional, fwdRate, spot, direction, marginPct, triggerPc
     return {
         contractValue,
         initialDeposit,
-        marginCallAmt,
         mc1Spot,
         mc2Spot,
         mc3Spot,
@@ -1130,7 +1135,7 @@ const App = () => {
                                                 <span className={`inline-flex items-center justify-center w-6 h-6 rounded-lg text-xs font-bold ${dark ? 'bg-indigo-900/40 text-indigo-400' : 'bg-indigo-50 text-indigo-600'}`}>{i + 1}</span>
                                             </td>
                                             <td className="px-4 py-3 text-right font-mono text-xs">{formatNumber(tr.margin.contractValue, 0)} {quoteCcy}</td>
-                                            <td className="px-4 py-3 text-right font-mono text-xs font-semibold">{formatNumber(tr.margin.initialDeposit, 0)} {quoteCcy}</td>
+                                            <td className="px-4 py-3 text-right font-mono text-xs font-semibold">{formatNumber(tr.margin.initialDeposit, 0)} {baseCcy}</td>
                                             <td className={`px-4 py-3 text-right font-mono text-xs font-bold ${dark ? 'text-amber-400' : 'text-amber-600'}`}>{formatRate(tr.margin.mc1Spot, pairStr)}</td>
                                             <td className={`px-4 py-3 text-right font-mono text-xs font-bold ${dark ? 'text-orange-400' : 'text-orange-600'}`}>{formatRate(tr.margin.mc2Spot, pairStr)}</td>
                                             <td className={`px-4 py-3 text-right font-mono text-xs font-bold ${dark ? 'text-red-400' : 'text-red-600'}`}>{formatRate(tr.margin.mc3Spot, pairStr)}</td>
@@ -1159,7 +1164,7 @@ const App = () => {
                                 </div>
                                 <div className="text-center">
                                     <p className={`text-[10px] uppercase tracking-wider font-semibold ${dark ? 'text-slate-400' : 'text-slate-500'}`}>{t.initialDeposit}</p>
-                                    <p className={`font-mono text-sm font-bold mt-1 ${dark ? 'text-amber-400' : 'text-amber-600'}`}>{formatNumber(summary.totalDeposit, 0)} {quoteCcy}</p>
+                                    <p className={`font-mono text-sm font-bold mt-1 ${dark ? 'text-amber-400' : 'text-amber-600'}`}>{formatNumber(summary.totalDeposit, 0)} {baseCcy}</p>
                                 </div>
                                 <div className="text-center">
                                     <p className={`text-[10px] uppercase tracking-wider font-semibold ${dark ? 'text-slate-400' : 'text-slate-500'}`}>{t.marginDeposit}</p>
