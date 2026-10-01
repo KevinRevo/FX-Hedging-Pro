@@ -360,31 +360,24 @@ const calcMarginCall = (notional, fwdRate, spot, direction, marginPct, triggerPc
     const initialDeposit = notional * (marginPct / 100);
     const contractValue = notional * fwdRate;
     
-    // Appel de marge : se déclenche quand le taux s'AMÉLIORE pour le client
-    // Car la banque est exposée si le marché est meilleur que le taux bloqué.
-    // Le client a un gain latent = la banque a une perte latente.
-    // Quand cette perte latente dépasse le seuil (triggerPct% du notionnel), → appel de marge.
-    
-    // Seuil de déclenchement en devise de base
-    const triggerAmount = notional * (triggerPct / 100);
-    // Mouvement de spot correspondant à ce seuil
-    const movePerUnit = triggerAmount / notional; // = triggerPct / 100
+    // Appel de marge : se déclenche quand le taux se DÉGRADE pour le client
+    // (le spot bouge CONTRE le client par rapport au taux bloqué).
+    // Seuil = taux forward × (1 ± triggerPct%)
     
     let mc1Spot, mc2Spot, mc3Spot;
     if (direction === 'buy') {
-        // Client a acheté Quote (vendu Base) au taux fwdRate.
-        // Le taux s'améliore pour le client si le spot BAISSE (il aurait pu acheter moins cher).
-        // → Appel de marge quand le spot baisse significativement sous le fwdRate.
-        mc1Spot = fwdRate - movePerUnit;
-        mc2Spot = fwdRate - movePerUnit * 2;
-        mc3Spot = fwdRate - movePerUnit * 3;
+        // Client a acheté Quote (USD) au taux fwdRate (ex: 1.12).
+        // Si le spot MONTE → le client perd (il a bloqué à un taux inférieur au marché).
+        // MC1 = 1.12 × 1.05 = 1.176
+        mc1Spot = fwdRate * (1 + triggerPct / 100);
+        mc2Spot = fwdRate * (1 + (triggerPct * 2) / 100);
+        mc3Spot = fwdRate * (1 + (triggerPct * 3) / 100);
     } else {
-        // Client a vendu Quote (acheté Base) au taux fwdRate.
-        // Le taux s'améliore pour le client si le spot MONTE (il aurait pu vendre plus cher).
-        // → Appel de marge quand le spot monte significativement au-dessus du fwdRate.
-        mc1Spot = fwdRate + movePerUnit;
-        mc2Spot = fwdRate + movePerUnit * 2;
-        mc3Spot = fwdRate + movePerUnit * 3;
+        // Client a vendu Quote (USD) au taux fwdRate.
+        // Si le spot BAISSE → le client perd (il a bloqué à un taux supérieur au marché).
+        mc1Spot = fwdRate * (1 - triggerPct / 100);
+        mc2Spot = fwdRate * (1 - (triggerPct * 2) / 100);
+        mc3Spot = fwdRate * (1 - (triggerPct * 3) / 100);
     }
 
     const distanceToMC1 = Math.abs(spot - mc1Spot);
