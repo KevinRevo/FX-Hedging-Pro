@@ -331,12 +331,17 @@ const calcForwardRate = (spot, rateBase, rateQuote, daysStart, daysEnd, feePerce
     const pts1 = calcForwardPoints(spot, rateBase, rateQuote, daysStart);
     const pts2 = calcForwardPoints(spot, rateBase, rateQuote, daysEnd);
     
-    // Logique Window Forward (Flex Forward) : 
-    // La banque prend le cas le plus défavorable pour le client sur la fenêtre de tirage
-    const fwdPts = direction === 'buy' ? Math.max(pts1, pts2) : Math.min(pts1, pts2);
+    // Logique Corporate Hedging : 'buy' (Achat) signifie généralement Achat de la devise étrangère (Quote) 
+    // et Vente de la devise de base. 
+    // Si le client vend la devise de base, la banque veut donner le MOINS de Quote possible (taux le plus bas).
+    const clientBuysQuote = direction === 'buy';
+    
+    const fwdPts = clientBuysQuote ? Math.min(pts1, pts2) : Math.max(pts1, pts2);
     
     const feePts = calcFeePoints(spot, feePercent);
-    const feeAdj = direction === 'buy' ? feePts : -feePts;
+    // Si client achète Quote (vend Base), il reçoit moins -> on soustrait les frais.
+    // Si client vend Quote (achète Base), il paie plus -> on ajoute les frais.
+    const feeAdj = clientBuysQuote ? -feePts : feePts;
     
     return {
         forwardPoints: fwdPts,
@@ -990,8 +995,8 @@ const App = () => {
                                                         ? (dark ? 'bg-emerald-900/40 border-emerald-700 text-emerald-400' : 'bg-emerald-50 border-emerald-200 text-emerald-700')
                                                         : (dark ? 'bg-red-900/40 border-red-700 text-red-400' : 'bg-red-50 border-red-200 text-red-700')
                                                 } border focus:ring-2 focus:ring-indigo-500/30 outline-none`}>
-                                                <option value="buy">{t.buy} {baseCcy}</option>
-                                                <option value="sell">{t.sell} {baseCcy}</option>
+                                                <option value="buy">{t.buy} {quoteCcy} / {t.sell} {baseCcy}</option>
+                                                <option value="sell">{t.sell} {quoteCcy} / {t.buy} {baseCcy}</option>
                                             </select>
                                         </td>
                                         <td className="px-4 py-3 text-right">
