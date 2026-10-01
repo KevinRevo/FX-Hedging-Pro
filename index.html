@@ -622,11 +622,14 @@ const App = () => {
     // Computed tranches with forward calculations
     const computedTranches = useMemo(() => {
         return tranches.map(tr => {
+            const daysToStart = daysBetween(todayStr, tr.startDate);
             const daysToEnd = daysBetween(todayStr, tr.endDate);
-            const d = Math.max(daysToEnd, 1);
+            const dStart = Math.max(daysToStart, 0);
+            const dEnd = Math.max(daysToEnd, 1);
             const rBase = rates[baseCcy] || 0;
             const rQuote = rates[quoteCcy] || 0;
-            const calc = calcForwardRate(spot, rBase, rQuote, d, feePercent, tr.direction);
+            
+            const calc = calcForwardRate(spot, rBase, rQuote, dStart, dEnd, feePercent, tr.direction);
             
             const finalForwardRate = tr.customForwardRate !== undefined ? tr.customForwardRate : calc.forwardRate;
             const notionalValue = tr.notional * finalForwardRate;
@@ -635,7 +638,7 @@ const App = () => {
 
             return {
                 ...tr,
-                days: d,
+                days: calc.pricingDays || dEnd,
                 ...calc,
                 forwardRate: finalForwardRate,
                 notionalValue,
