@@ -70,7 +70,7 @@ const { useState, useEffect, useMemo, useCallback, useRef } = React;
 const CURRENCIES = ['EUR','USD','GBP','CHF','HUF','CZK','PLN','SEK','NOK','DKK','RON'];
 
 const DEFAULT_RATES = {
-    EUR: 2.65, USD: 4.25, GBP: 4.25, CHF: 1.25,
+    EUR: 2.50, USD: 4.00, GBP: 4.25, CHF: 1.25,
     HUF: 6.50, CZK: 3.75, PLN: 5.75, SEK: 2.50,
     NOK: 4.00, DKK: 2.85, RON: 6.25
 };
@@ -183,6 +183,8 @@ const T = {
         settings: "Paramètres",
         resetRates: "Réinitialiser les Taux",
         reset: "Réinitialiser",
+        live: "Live 🟢",
+        manual: "Manuel 🟠",
     },
     en: {
         appTitle: "FX Hedging Pro",
@@ -272,6 +274,8 @@ const T = {
         settings: "Settings",
         resetRates: "Reset Rates",
         reset: "Reset",
+        live: "Live 🟢",
+        manual: "Manual 🟠",
     }
 };
 
@@ -488,9 +492,11 @@ const App = () => {
     const [baseCcy, setBaseCcy] = useState('EUR');
     const [quoteCcy, setQuoteCcy] = useState('USD');
     const [spot, setSpot] = useState(1.0850);
+    const [isLive, setIsLive] = useState(true);
+    const baseSpotRef = useRef(1.0850);
     const [feePercent, setFeePercent] = useState(0.15);
     const [marginPct, setMarginPct] = useState(5);
-    const [marginTrigger, setMarginTrigger] = useState(80);
+    const [marginTrigger, setMarginTrigger] = useState(5);
 
     const todayStr = today();
     const createDefaultTranche = (index = 0) => ({
@@ -502,6 +508,57 @@ const App = () => {
     });
 
     const [tranches, setTranches] = useState([createDefaultTranche(0)]);
+
+    // Live Spot Fetching
+    useEffect(() => {
+        let fetchInterval, tickInterval;
+        
+        const fetchBaseRate = async () => {
+            if (!isLive) return;
+            if (baseCcy === quoteCcy) {
+                setSpot(1);
+                baseSpotRef.current = 1;
+                return;
+            }
+            try {
+                const res = await fetch(`https://open.er-api.com/v6/latest/${baseCcy}`);
+                const data = await res.json();
+                if (data && data.rates && data.rates[quoteCcy]) {
+                    baseSpotRef.current = data.rates[quoteCcy];
+                    setSpot(baseSpotRef.current);
+                }
+            } catch (e) {
+                console.error("Failed to fetch live rate", e);
+            }
+        };
+
+        if (isLive) {
+            fetchBaseRate();
+            // Fetch real rate every 60 seconds to avoid API limits
+            fetchInterval = setInterval(fetchBaseRate, 60000);
+            
+            // Simulate interbank live tick every 1.5 seconds (micro-volatility)
+            tickInterval = setInterval(() => {
+                const dec = (quoteCcy === 'HUF' || quoteCcy === 'CZK') ? 100 : 10000;
+                // random movement between -2 and +2 pips
+                const movement = (Math.random() * 4 - 2) / dec;
+                setSpot(prev => {
+                    // prevent drifting too far from the real base rate
+                    const newSpot = prev + movement;
+                    const maxDrift = 10 / dec; 
+                    if (Math.abs(newSpot - baseSpotRef.current) > maxDrift) {
+                        return baseSpotRef.current + (Math.sign(movement) * maxDrift);
+                    }
+                    return parseFloat(newSpot.toFixed(dec === 100 ? 3 : 5));
+                });
+            }, 1500);
+        }
+
+        return () => {
+            clearInterval(fetchInterval);
+            clearInterval(tickInterval);
+        };
+    }, [isLive, baseCcy, quoteCcy]);
 
     // Save modal
     const [saveModalOpen, setSaveModalOpen] = useState(false);
@@ -735,10 +792,20 @@ const App = () => {
 
                     {/* Spot Rate */}
                     <div className={`rounded-2xl p-5 ${dark ? 'bg-night-800 border border-slate-700/50' : 'bg-white border border-slate-200/60'} shadow-sm`}>
-                        <label className={`text-xs font-semibold uppercase tracking-wider ${dark ? 'text-slate-400' : 'text-slate-500'}`}>{t.spotToday}</label>
-                        <div className="mt-3">
-                            <input type="number" step="0.0001" value={spot} onChange={e => setSpot(parseFloat(e.target.value) || 0)}
-                                className={`w-full px-3 py-2 rounded-xl font-mono text-xl font-bold ${dark ? 'bg-slate-700 border-slate-600 text-emerald-400' : 'bg-slate-50 border-slate-200 text-emerald-600'} border focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-500 outline-none`} />
+                        <div className="flex items-center justify-between">
+                            <label className={`text-xs font-semibold uppercase tracking-wider ${dark ? 'text-slate-400' : 'text-slate-500'}`}>{t.spotToday}</label>
+                            <button onClick={() => setIsLive(!isLive)}
+                                className={`text-[10px] px-2 py-0.5 rounded-full font-bold transition-all ${isLive ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-400' : 'bg-slate-200 text-slate-600 dark:bg-slate-700 dark:text-slate-400'}`}>
+                                {isLive ? t.live : t.manual}
+                            </button>
+                        </div>
+                        <div className="mt-3 relative">
+                            <input type="number" step="0.0001" value={spot} 
+                                onChange={e => {
+                                    setSpot(parseFloat(e.target.value) || 0);
+                                    setIsLive(false);
+                                }}
+                                className={`w-full px-3 py-2 rounded-xl font-mono text-xl font-bold ${dark ? 'bg-slate-700 border-slate-600 text-emerald-400' : 'bg-slate-50 border-slate-200 text-emerald-600'} border focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-500 outline-none transition-colors duration-100`} />
                         </div>
                         <p className={`text-[10px] mt-1.5 ${dark ? 'text-slate-500' : 'text-slate-400'}`}>{CCY_FLAGS[baseCcy]} 1 {baseCcy} = {CCY_FLAGS[quoteCcy]} {formatRate(spot, pairStr)} {quoteCcy}</p>
                     </div>
