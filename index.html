@@ -327,18 +327,23 @@ const calcFeePoints = (spot, feePercent) => {
     return spot * (feePercent / 100);
 };
 
-const calcForwardRate = (spot, rateBase, rateQuote, days, feePercent, direction) => {
-    const fwdPts = calcForwardPoints(spot, rateBase, rateQuote, days);
+const calcForwardRate = (spot, rateBase, rateQuote, daysStart, daysEnd, feePercent, direction) => {
+    const pts1 = calcForwardPoints(spot, rateBase, rateQuote, daysStart);
+    const pts2 = calcForwardPoints(spot, rateBase, rateQuote, daysEnd);
+    
+    // Logique Window Forward (Flex Forward) : 
+    // La banque prend le cas le plus défavorable pour le client sur la fenêtre de tirage
+    const fwdPts = direction === 'buy' ? Math.max(pts1, pts2) : Math.min(pts1, pts2);
+    
     const feePts = calcFeePoints(spot, feePercent);
-    // Fee always makes the rate worse for the client
-    // Buy quote currency: client pays more → add fee
-    // Sell quote currency: client receives less → subtract fee
     const feeAdj = direction === 'buy' ? feePts : -feePts;
+    
     return {
         forwardPoints: fwdPts,
         feePoints: feePts,
         forwardRate: spot + fwdPts + feeAdj,
-        totalPoints: fwdPts + feeAdj
+        totalPoints: fwdPts + feeAdj,
+        pricingDays: fwdPts === pts1 ? daysStart : daysEnd
     };
 };
 
