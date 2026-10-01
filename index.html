@@ -1,0 +1,1114 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FX Hedging Pro</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'system-ui', 'sans-serif'],
+                        mono: ['JetBrains Mono', 'monospace'],
+                    },
+                    colors: {
+                        warm: {
+                            50: '#FAFAF7',
+                            100: '#F5F5F0',
+                            200: '#E8E8E0',
+                            300: '#D4D4C8',
+                        },
+                        night: {
+                            800: '#1a1a2e',
+                            900: '#12121f',
+                            950: '#0a0a15',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body { font-family: 'Inter', system-ui, sans-serif; }
+        .font-mono { font-family: 'JetBrains Mono', monospace; }
+        * { transition: background-color 0.3s ease, color 0.2s ease, border-color 0.3s ease, box-shadow 0.3s ease; }
+        input[type="number"]::-webkit-inner-spin-button,
+        input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+        input[type="number"] { -moz-appearance: textfield; }
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
+        .dark ::-webkit-scrollbar-thumb { background: #475569; }
+        .toast-enter { animation: slideInRight 0.3s ease-out; }
+        .toast-exit { animation: slideOutRight 0.3s ease-in forwards; }
+        @keyframes slideInRight { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+        @keyframes slideOutRight { from { transform: translateX(0); opacity: 1; } to { transform: translateX(100%); opacity: 0; } }
+        @keyframes fadeIn { from { opacity: 0; transform: scale(0.95); } to { opacity: 1; transform: scale(1); } }
+        .fade-in { animation: fadeIn 0.2s ease-out; }
+        .card-hover { transition: transform 0.2s ease, box-shadow 0.2s ease; }
+        .card-hover:hover { transform: translateY(-1px); box-shadow: 0 8px 25px -5px rgba(0,0,0,0.1); }
+        select { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%236b7280' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 8px center; }
+    </style>
+</head>
+<body class="min-h-screen">
+<div id="root"></div>
+<script type="text/babel">
+const { useState, useEffect, useMemo, useCallback, useRef } = React;
+
+// ════════════════════════════════════════════
+// CONSTANTS & DATA
+// ════════════════════════════════════════════
+const CURRENCIES = ['EUR','USD','GBP','CHF','HUF','CZK','PLN','SEK','NOK','DKK','RON'];
+
+const DEFAULT_RATES = {
+    EUR: 2.65, USD: 4.25, GBP: 4.25, CHF: 1.25,
+    HUF: 6.50, CZK: 3.75, PLN: 5.75, SEK: 2.50,
+    NOK: 4.00, DKK: 2.85, RON: 6.25
+};
+
+const CCY_FLAGS = {
+    EUR:'🇪🇺', USD:'🇺🇸', GBP:'🇬🇧', CHF:'🇨🇭',
+    HUF:'🇭🇺', CZK:'🇨🇿', PLN:'🇵🇱', SEK:'🇸🇪',
+    NOK:'🇳🇴', DKK:'🇩🇰', RON:'🇷🇴'
+};
+
+const CCY_SYMBOLS = {
+    EUR:'€', USD:'$', GBP:'£', CHF:'CHF',
+    HUF:'Ft', CZK:'Kč', PLN:'zł', SEK:'kr',
+    NOK:'kr', DKK:'kr.', RON:'lei'
+};
+
+const CCY_DECIMALS = {
+    EUR:4, USD:4, GBP:4, CHF:4, HUF:2, CZK:4, PLN:4, SEK:4, NOK:4, DKK:4, RON:4
+};
+
+// ════════════════════════════════════════════
+// TRANSLATIONS
+// ════════════════════════════════════════════
+const T = {
+    fr: {
+        appTitle: "FX Hedging Pro",
+        strategy: "Stratégie de Couverture",
+        newStrategy: "Nouvelle Stratégie",
+        savedStrategies: "Stratégies Sauvegardées",
+        save: "Sauvegarder",
+        load: "Charger",
+        delete: "Supprimer",
+        export: "Exporter",
+        strategyName: "Nom de la stratégie",
+        enterName: "Entrez un nom...",
+        cancel: "Annuler",
+        confirm: "Confirmer",
+        currencyPair: "Paire de Devises",
+        base: "Base",
+        quote: "Contrepartie",
+        spotRate: "Cours Spot",
+        spotToday: "Spot Today",
+        fees: "Frais",
+        feeMarkup: "Markup Forward (%)",
+        interestRates: "Taux d'Intérêt",
+        editRates: "Modifier les Taux",
+        annualRate: "Taux annuel (%)",
+        tranches: "Tranches",
+        addTranche: "Ajouter une Tranche",
+        tranche: "Tranche",
+        startDate: "Date Début",
+        endDate: "Date Fin",
+        direction: "Direction",
+        buy: "Achat",
+        sell: "Vente",
+        notional: "Notionnel",
+        days: "Jours",
+        fwdPoints: "Pts Forward",
+        feePts: "Pts Frais",
+        fwdRate: "Taux Forward",
+        value: "Valeur",
+        actions: "Actions",
+        summary: "Résumé",
+        totalNotional: "Notionnel Total",
+        weightedAvgRate: "Taux Moyen Pondéré",
+        totalValue: "Valeur Totale",
+        vsSpot: "vs Spot",
+        marginCall: "Appel de Marge",
+        marginCalculator: "Calculateur d'Appel de Marge",
+        marginDeposit: "Dépôt Initial (%)",
+        marginTrigger: "Seuil de Déclenchement (%)",
+        contractValue: "Valeur du Contrat",
+        initialDeposit: "Dépôt Initial Requis",
+        marginCallAmount: "Montant d'Appel de Marge",
+        marginCallLevel: "Cours d'Appel de Marge",
+        firstMC: "1er Appel de Marge",
+        secondMC: "2ème Appel de Marge",
+        thirdMC: "3ème Appel de Marge",
+        riskLevel: "Niveau de Risque",
+        low: "Faible",
+        medium: "Moyen",
+        high: "Élevé",
+        critical: "Critique",
+        noSaved: "Aucune stratégie sauvegardée",
+        copied: "Copié dans le presse-papiers !",
+        saved: "Stratégie sauvegardée !",
+        deleted: "Stratégie supprimée !",
+        loaded: "Stratégie chargée !",
+        nameRequired: "Veuillez entrer un nom pour la stratégie",
+        light: "Clair",
+        dark: "Sombre",
+        language: "Langue",
+        parity: "Parité des Taux d'Intérêt",
+        formula: "Formule Forward",
+        baseRate: "Taux Base",
+        quoteRate: "Taux Quote",
+        differential: "Différentiel",
+        premium: "Premium",
+        discount: "Discount",
+        copyStrategy: "Copier le Résumé",
+        date: "Date",
+        name: "Nom",
+        pair: "Paire",
+        totalTranches: "Nb Tranches",
+        close: "Fermer",
+        marginPerTranche: "Marge par Tranche",
+        marginTotal: "Marge Totale",
+        distanceToMC: "Distance au 1er MC",
+        pips: "pips",
+        settings: "Paramètres",
+        resetRates: "Réinitialiser les Taux",
+        reset: "Réinitialiser",
+    },
+    en: {
+        appTitle: "FX Hedging Pro",
+        strategy: "Hedging Strategy",
+        newStrategy: "New Strategy",
+        savedStrategies: "Saved Strategies",
+        save: "Save",
+        load: "Load",
+        delete: "Delete",
+        export: "Export",
+        strategyName: "Strategy Name",
+        enterName: "Enter a name...",
+        cancel: "Cancel",
+        confirm: "Confirm",
+        currencyPair: "Currency Pair",
+        base: "Base",
+        quote: "Quote",
+        spotRate: "Spot Rate",
+        spotToday: "Spot Today",
+        fees: "Fees",
+        feeMarkup: "Forward Markup (%)",
+        interestRates: "Interest Rates",
+        editRates: "Edit Rates",
+        annualRate: "Annual Rate (%)",
+        tranches: "Tranches",
+        addTranche: "Add Tranche",
+        tranche: "Tranche",
+        startDate: "Start Date",
+        endDate: "End Date",
+        direction: "Direction",
+        buy: "Buy",
+        sell: "Sell",
+        notional: "Notional",
+        days: "Days",
+        fwdPoints: "Fwd Points",
+        feePts: "Fee Pts",
+        fwdRate: "Fwd Rate",
+        value: "Value",
+        actions: "Actions",
+        summary: "Summary",
+        totalNotional: "Total Notional",
+        weightedAvgRate: "Weighted Avg Rate",
+        totalValue: "Total Value",
+        vsSpot: "vs Spot",
+        marginCall: "Margin Call",
+        marginCalculator: "Margin Call Calculator",
+        marginDeposit: "Initial Deposit (%)",
+        marginTrigger: "Trigger Level (%)",
+        contractValue: "Contract Value",
+        initialDeposit: "Initial Deposit Required",
+        marginCallAmount: "Margin Call Amount",
+        marginCallLevel: "Margin Call Level",
+        firstMC: "1st Margin Call",
+        secondMC: "2nd Margin Call",
+        thirdMC: "3rd Margin Call",
+        riskLevel: "Risk Level",
+        low: "Low",
+        medium: "Medium",
+        high: "High",
+        critical: "Critical",
+        noSaved: "No saved strategies",
+        copied: "Copied to clipboard!",
+        saved: "Strategy saved!",
+        deleted: "Strategy deleted!",
+        loaded: "Strategy loaded!",
+        nameRequired: "Please enter a strategy name",
+        light: "Light",
+        dark: "Dark",
+        language: "Language",
+        parity: "Interest Rate Parity",
+        formula: "Forward Formula",
+        baseRate: "Base Rate",
+        quoteRate: "Quote Rate",
+        differential: "Differential",
+        premium: "Premium",
+        discount: "Discount",
+        copyStrategy: "Copy Summary",
+        date: "Date",
+        name: "Name",
+        pair: "Pair",
+        totalTranches: "Tranches",
+        close: "Close",
+        marginPerTranche: "Margin per Tranche",
+        marginTotal: "Total Margin",
+        distanceToMC: "Distance to 1st MC",
+        pips: "pips",
+        settings: "Settings",
+        resetRates: "Reset Rates",
+        reset: "Reset",
+    }
+};
+
+// ════════════════════════════════════════════
+// UTILITY FUNCTIONS
+// ════════════════════════════════════════════
+const daysBetween = (d1, d2) => {
+    const a = new Date(d1); const b = new Date(d2);
+    a.setHours(0,0,0,0); b.setHours(0,0,0,0);
+    return Math.round((b - a) / 86400000);
+};
+
+const today = () => {
+    const d = new Date();
+    return d.toISOString().split('T')[0];
+};
+
+const addMonths = (dateStr, months) => {
+    const d = new Date(dateStr);
+    d.setMonth(d.getMonth() + months);
+    return d.toISOString().split('T')[0];
+};
+
+const formatNumber = (n, decimals = 2) => {
+    if (n == null || isNaN(n)) return '—';
+    return n.toLocaleString('fr-FR', { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
+};
+
+const formatRate = (n, pair) => {
+    if (n == null || isNaN(n)) return '—';
+    const dec = (pair && (pair.includes('HUF') || pair.includes('CZK'))) ? 2 : 4;
+    return n.toLocaleString('fr-FR', { minimumFractionDigits: dec, maximumFractionDigits: dec });
+};
+
+// ════════════════════════════════════════════
+// FORWARD POINTS CALCULATION (IRP)
+// ════════════════════════════════════════════
+const calcForwardPoints = (spot, rateBase, rateQuote, days) => {
+    // Interest Rate Parity: F = S × (1 + rQ × d/360) / (1 + rB × d/360)
+    // Forward Points = F - S = S × [(rQ - rB) × d/360] / [1 + rB × d/360]
+    const rb = rateBase / 100;
+    const rq = rateQuote / 100;
+    const d = days / 360;
+    const points = spot * (rq - rb) * d / (1 + rb * d);
+    return points;
+};
+
+const calcFeePoints = (spot, feePercent) => {
+    return spot * (feePercent / 100);
+};
+
+const calcForwardRate = (spot, rateBase, rateQuote, days, feePercent, direction) => {
+    const fwdPts = calcForwardPoints(spot, rateBase, rateQuote, days);
+    const feePts = calcFeePoints(spot, feePercent);
+    // Fee always makes the rate worse for the client
+    // Buy quote currency: client pays more → add fee
+    // Sell quote currency: client receives less → subtract fee
+    const feeAdj = direction === 'buy' ? feePts : -feePts;
+    return {
+        forwardPoints: fwdPts,
+        feePoints: feePts,
+        forwardRate: spot + fwdPts + feeAdj,
+        totalPoints: fwdPts + feeAdj
+    };
+};
+
+// ════════════════════════════════════════════
+// MARGIN CALL CALCULATIONS
+// ════════════════════════════════════════════
+const calcMarginCall = (notional, fwdRate, spot, direction, marginPct, triggerPct) => {
+    const contractValue = notional * fwdRate;
+    const initialDeposit = contractValue * (marginPct / 100);
+    const marginCallAmt = initialDeposit * (triggerPct / 100);
+    
+    // How much can spot move before margin call?
+    // Loss = notional × |spot_new - fwd_rate|
+    // Margin call when loss >= initialDeposit × (1 - triggerPct/100)
+    const buffer = initialDeposit * (1 - triggerPct / 100);
+    const movePerUnit = buffer / notional;
+    
+    // If buying quote (selling base): loss when spot goes DOWN from fwd_rate
+    // If selling quote (buying base): loss when spot goes UP from fwd_rate
+    let mc1Spot, mc2Spot, mc3Spot;
+    if (direction === 'buy') {
+        // Client bought at fwdRate. Loses if market spot drops (could have bought cheaper)
+        mc1Spot = fwdRate - movePerUnit;
+        mc2Spot = fwdRate - movePerUnit * 2;
+        mc3Spot = fwdRate - movePerUnit * 3;
+    } else {
+        // Client sold at fwdRate. Loses if market spot rises (could have sold higher)
+        mc1Spot = fwdRate + movePerUnit;
+        mc2Spot = fwdRate + movePerUnit * 2;
+        mc3Spot = fwdRate + movePerUnit * 3;
+    }
+
+    const distanceToMC1 = Math.abs(spot - mc1Spot);
+    const distanceToMC1Pips = distanceToMC1 * 10000;
+    
+    let riskLevel = 'low';
+    const pctDistance = (distanceToMC1 / spot) * 100;
+    if (pctDistance < 1) riskLevel = 'critical';
+    else if (pctDistance < 3) riskLevel = 'high';
+    else if (pctDistance < 5) riskLevel = 'medium';
+
+    return {
+        contractValue,
+        initialDeposit,
+        marginCallAmt,
+        mc1Spot,
+        mc2Spot,
+        mc3Spot,
+        distanceToMC1,
+        distanceToMC1Pips,
+        riskLevel
+    };
+};
+
+// ════════════════════════════════════════════
+// SVG ICONS
+// ════════════════════════════════════════════
+const Icon = ({ name, className = "w-4 h-4" }) => {
+    const icons = {
+        sun: <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M4.93 4.93l1.41 1.41m11.32 11.32l1.41 1.41M2 12h2m16 0h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/></svg>,
+        moon: <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>,
+        plus: <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12 5v14M5 12h14"/></svg>,
+        trash: <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/><line x1="10" x2="10" y1="11" y2="17"/><line x1="14" x2="14" y1="11" y2="17"/></svg>,
+        save: <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>,
+        copy: <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>,
+        folder: <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/></svg>,
+        download: <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg>,
+        shield: <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 13c0 5-3.5 7.5-7.66 9.7a1 1 0 0 1-.68 0C7.5 20.5 4 18 4 13V6a1 1 0 0 1 .76-.97l8-2a1 1 0 0 1 .48 0l8 2A1 1 0 0 1 20 6z"/><path d="m9 12 2 2 4-4"/></svg>,
+        settings: <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>,
+        chevronDown: <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="m6 9 6 6 6-6"/></svg>,
+        chevronUp: <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="m18 15-6-6-6 6"/></svg>,
+        arrowRight: <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg>,
+        globe: <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>,
+        alertTriangle: <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><path d="M12 9v4M12 17h.01"/></svg>,
+        x: <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18M6 6l12 12"/></svg>,
+        refresh: <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16"/><path d="M16 16h5v5"/></svg>,
+    };
+    return icons[name] || null;
+};
+
+// ════════════════════════════════════════════
+// TOAST COMPONENT
+// ════════════════════════════════════════════
+const Toast = ({ message, onClose }) => {
+    const [exiting, setExiting] = useState(false);
+    useEffect(() => {
+        const t1 = setTimeout(() => setExiting(true), 2500);
+        const t2 = setTimeout(onClose, 2800);
+        return () => { clearTimeout(t1); clearTimeout(t2); };
+    }, [onClose]);
+    return (
+        <div className={`fixed top-5 right-5 z-50 ${exiting ? 'toast-exit' : 'toast-enter'}`}>
+            <div className="flex items-center gap-3 px-5 py-3 bg-emerald-600 text-white rounded-xl shadow-2xl">
+                <Icon name="shield" className="w-5 h-5 text-emerald-200" />
+                <span className="font-medium text-sm">{message}</span>
+            </div>
+        </div>
+    );
+};
+
+// ════════════════════════════════════════════
+// MODAL COMPONENT
+// ════════════════════════════════════════════
+const Modal = ({ open, onClose, title, children }) => {
+    if (!open) return null;
+    return (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={onClose}>
+            <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" />
+            <div className="relative bg-white dark:bg-night-800 rounded-2xl shadow-2xl max-w-lg w-full p-6 fade-in" onClick={e => e.stopPropagation()}>
+                <div className="flex items-center justify-between mb-4">
+                    <h3 className="text-lg font-bold text-slate-800 dark:text-slate-100">{title}</h3>
+                    <button onClick={onClose} className="p-1 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors">
+                        <Icon name="x" className="w-5 h-5 text-slate-400" />
+                    </button>
+                </div>
+                {children}
+            </div>
+        </div>
+    );
+};
+
+// ════════════════════════════════════════════
+// MAIN APP
+// ════════════════════════════════════════════
+const App = () => {
+    // Theme & Language
+    const [dark, setDark] = useState(() => localStorage.getItem('fx-theme') === 'dark');
+    const [lang, setLang] = useState(() => localStorage.getItem('fx-lang') || 'fr');
+    const t = T[lang];
+
+    useEffect(() => {
+        document.documentElement.classList.toggle('dark', dark);
+        localStorage.setItem('fx-theme', dark ? 'dark' : 'light');
+    }, [dark]);
+    useEffect(() => { localStorage.setItem('fx-lang', lang); }, [lang]);
+
+    // Toast
+    const [toast, setToast] = useState(null);
+    const showToast = useCallback((msg) => setToast(msg), []);
+
+    // Interest rates
+    const [rates, setRates] = useState(() => {
+        const saved = localStorage.getItem('fx-rates');
+        return saved ? JSON.parse(saved) : { ...DEFAULT_RATES };
+    });
+    useEffect(() => { localStorage.setItem('fx-rates', JSON.stringify(rates)); }, [rates]);
+
+    const [showRates, setShowRates] = useState(false);
+
+    // Strategy state
+    const [baseCcy, setBaseCcy] = useState('EUR');
+    const [quoteCcy, setQuoteCcy] = useState('USD');
+    const [spot, setSpot] = useState(1.0850);
+    const [feePercent, setFeePercent] = useState(0.15);
+    const [marginPct, setMarginPct] = useState(5);
+    const [marginTrigger, setMarginTrigger] = useState(80);
+
+    const todayStr = today();
+    const createDefaultTranche = (index = 0) => ({
+        id: Date.now() + Math.random(),
+        startDate: addMonths(todayStr, 1 + index),
+        endDate: addMonths(todayStr, 2 + index),
+        direction: 'buy',
+        notional: 100000,
+    });
+
+    const [tranches, setTranches] = useState([createDefaultTranche(0)]);
+
+    // Save modal
+    const [saveModalOpen, setSaveModalOpen] = useState(false);
+    const [saveName, setSaveName] = useState('');
+
+    // Saved strategies panel
+    const [showSaved, setShowSaved] = useState(false);
+    const [savedStrategies, setSavedStrategies] = useState(() => {
+        const s = localStorage.getItem('fx-strategies');
+        return s ? JSON.parse(s) : [];
+    });
+    useEffect(() => { localStorage.setItem('fx-strategies', JSON.stringify(savedStrategies)); }, [savedStrategies]);
+
+    // Computed tranches with forward calculations
+    const computedTranches = useMemo(() => {
+        return tranches.map(tr => {
+            const daysToEnd = daysBetween(todayStr, tr.endDate);
+            const d = Math.max(daysToEnd, 1);
+            const rBase = rates[baseCcy] || 0;
+            const rQuote = rates[quoteCcy] || 0;
+            const calc = calcForwardRate(spot, rBase, rQuote, d, feePercent, tr.direction);
+            const notionalValue = tr.notional * calc.forwardRate;
+            
+            const mc = calcMarginCall(tr.notional, calc.forwardRate, spot, tr.direction, marginPct, marginTrigger);
+
+            return {
+                ...tr,
+                days: d,
+                ...calc,
+                notionalValue,
+                margin: mc
+            };
+        });
+    }, [tranches, spot, rates, baseCcy, quoteCcy, feePercent, marginPct, marginTrigger, todayStr]);
+
+    // Summary calculations
+    const summary = useMemo(() => {
+        if (computedTranches.length === 0) return null;
+        const totalNotional = computedTranches.reduce((s, t) => s + t.notional, 0);
+        const weightedRate = totalNotional > 0
+            ? computedTranches.reduce((s, t) => s + t.notional * t.forwardRate, 0) / totalNotional
+            : 0;
+        const totalValue = computedTranches.reduce((s, t) => s + t.notionalValue, 0);
+        const vsSpot = weightedRate - spot;
+        const vsSpotPct = (vsSpot / spot) * 100;
+        const totalDeposit = computedTranches.reduce((s, t) => s + t.margin.initialDeposit, 0);
+        const totalContractValue = computedTranches.reduce((s, t) => s + t.margin.contractValue, 0);
+
+        return { totalNotional, weightedRate, totalValue, vsSpot, vsSpotPct, totalDeposit, totalContractValue };
+    }, [computedTranches, spot]);
+
+    // Handlers
+    const addTranche = () => {
+        const last = tranches[tranches.length - 1];
+        const newTr = {
+            id: Date.now() + Math.random(),
+            startDate: last ? last.endDate : addMonths(todayStr, 1),
+            endDate: last ? addMonths(last.endDate, 1) : addMonths(todayStr, 2),
+            direction: last ? last.direction : 'buy',
+            notional: last ? last.notional : 100000,
+        };
+        setTranches([...tranches, newTr]);
+    };
+
+    const removeTranche = (id) => {
+        if (tranches.length <= 1) return;
+        setTranches(tranches.filter(t => t.id !== id));
+    };
+
+    const updateTranche = (id, field, value) => {
+        setTranches(tranches.map(t => t.id === id ? { ...t, [field]: value } : t));
+    };
+
+    const saveStrategy = () => {
+        if (!saveName.trim()) { showToast(t.nameRequired); return; }
+        const strategy = {
+            id: Date.now(),
+            name: saveName.trim(),
+            date: todayStr,
+            baseCcy, quoteCcy, spot, feePercent, marginPct, marginTrigger,
+            tranches, rates: { [baseCcy]: rates[baseCcy], [quoteCcy]: rates[quoteCcy] }
+        };
+        setSavedStrategies([strategy, ...savedStrategies]);
+        setSaveModalOpen(false);
+        setSaveName('');
+        showToast(t.saved);
+    };
+
+    const loadStrategy = (strategy) => {
+        setBaseCcy(strategy.baseCcy);
+        setQuoteCcy(strategy.quoteCcy);
+        setSpot(strategy.spot);
+        setFeePercent(strategy.feePercent);
+        setMarginPct(strategy.marginPct);
+        setMarginTrigger(strategy.marginTrigger);
+        setTranches(strategy.tranches);
+        if (strategy.rates) {
+            setRates(prev => ({ ...prev, ...strategy.rates }));
+        }
+        setShowSaved(false);
+        showToast(t.loaded);
+    };
+
+    const deleteStrategy = (id) => {
+        setSavedStrategies(savedStrategies.filter(s => s.id !== id));
+        showToast(t.deleted);
+    };
+
+    const copyToClipboard = () => {
+        if (!summary) return;
+        const pair = `${baseCcy}/${quoteCcy}`;
+        const lines = [
+            `═══ FX Hedging Pro - ${t.strategy} ═══`,
+            `${t.currencyPair}: ${pair}`,
+            `${t.spotRate}: ${formatRate(spot, pair)}`,
+            `${t.feeMarkup}: ${feePercent}%`,
+            ``,
+            `── ${t.tranches} ──`,
+            ...computedTranches.map((tr, i) => 
+                `#${i + 1} | ${tr.startDate} → ${tr.endDate} | ${tr.direction === 'buy' ? t.buy : t.sell} | ${formatNumber(tr.notional, 0)} ${baseCcy} | ${t.fwdRate}: ${formatRate(tr.forwardRate, pair)}`
+            ),
+            ``,
+            `── ${t.summary} ──`,
+            `${t.totalNotional}: ${formatNumber(summary.totalNotional, 0)} ${baseCcy}`,
+            `${t.weightedAvgRate}: ${formatRate(summary.weightedRate, pair)}`,
+            `${t.totalValue}: ${formatNumber(summary.totalValue, 0)} ${quoteCcy}`,
+            `${t.vsSpot}: ${summary.vsSpot >= 0 ? '+' : ''}${formatRate(summary.vsSpot, pair)} (${summary.vsSpotPct >= 0 ? '+' : ''}${formatNumber(summary.vsSpotPct)}%)`,
+        ];
+        navigator.clipboard.writeText(lines.join('\n'));
+        showToast(t.copied);
+    };
+
+    const resetStrategy = () => {
+        setTranches([createDefaultTranche(0)]);
+        setSpot(1.0850);
+        setFeePercent(0.15);
+    };
+
+    const pairStr = `${baseCcy}/${quoteCcy}`;
+    const rateBase = rates[baseCcy] || 0;
+    const rateQuote = rates[quoteCcy] || 0;
+    const diffSign = rateQuote > rateBase ? '+' : '';
+    const differential = rateQuote - rateBase;
+
+    // Risk color helper
+    const riskColor = (level) => {
+        const colors = { low: 'text-emerald-600 dark:text-emerald-400', medium: 'text-amber-500', high: 'text-orange-500', critical: 'text-red-600 dark:text-red-400' };
+        return colors[level] || colors.low;
+    };
+    const riskBg = (level) => {
+        const colors = { low: 'bg-emerald-50 dark:bg-emerald-900/30 border-emerald-200 dark:border-emerald-700', medium: 'bg-amber-50 dark:bg-amber-900/30 border-amber-200 dark:border-amber-700', high: 'bg-orange-50 dark:bg-orange-900/30 border-orange-200 dark:border-orange-700', critical: 'bg-red-50 dark:bg-red-900/30 border-red-200 dark:border-red-700' };
+        return colors[level] || colors.low;
+    };
+    const riskLabel = (level) => {
+        const labels = { low: t.low, medium: t.medium, high: t.high, critical: t.critical };
+        return labels[level] || labels.low;
+    };
+
+    // ───── RENDER ─────
+    return (
+        <div className={`min-h-screen ${dark ? 'bg-night-900 text-slate-200' : 'bg-warm-50 text-slate-800'}`}>
+            {toast && <Toast message={toast} onClose={() => setToast(null)} />}
+
+            {/* ═══ HEADER ═══ */}
+            <header className={`sticky top-0 z-40 backdrop-blur-xl border-b ${dark ? 'bg-night-800/90 border-slate-700/50' : 'bg-white/90 border-slate-200/60'}`}>
+                <div className="max-w-[1600px] mx-auto px-4 sm:px-6 py-3 flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                        <div className={`w-9 h-9 rounded-xl flex items-center justify-center ${dark ? 'bg-indigo-600' : 'bg-indigo-500'} shadow-lg shadow-indigo-500/25`}>
+                            <span className="text-white font-bold text-sm">FX</span>
+                        </div>
+                        <div>
+                            <h1 className="text-lg font-bold tracking-tight">{t.appTitle}</h1>
+                            <p className={`text-xs ${dark ? 'text-slate-400' : 'text-slate-500'}`}>{t.strategy}</p>
+                        </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                        {/* Language toggle */}
+                        <button onClick={() => setLang(lang === 'fr' ? 'en' : 'fr')}
+                            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${dark ? 'bg-slate-700 hover:bg-slate-600 text-slate-300' : 'bg-slate-100 hover:bg-slate-200 text-slate-600'}`}>
+                            <Icon name="globe" className="w-3.5 h-3.5" />
+                            {lang === 'fr' ? 'EN' : 'FR'}
+                        </button>
+                        {/* Theme toggle */}
+                        <button onClick={() => setDark(!dark)}
+                            className={`p-2 rounded-lg transition-all ${dark ? 'bg-slate-700 hover:bg-slate-600 text-amber-400' : 'bg-slate-100 hover:bg-slate-200 text-slate-600'}`}>
+                            <Icon name={dark ? 'sun' : 'moon'} className="w-4 h-4" />
+                        </button>
+                        {/* Saved strategies */}
+                        <button onClick={() => setShowSaved(!showSaved)}
+                            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${dark ? 'bg-slate-700 hover:bg-slate-600 text-slate-300' : 'bg-slate-100 hover:bg-slate-200 text-slate-600'}`}>
+                            <Icon name="folder" className="w-3.5 h-3.5" />
+                            <span className="hidden sm:inline">{t.savedStrategies}</span>
+                            {savedStrategies.length > 0 && (
+                                <span className="bg-indigo-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full">{savedStrategies.length}</span>
+                            )}
+                        </button>
+                        {/* Save button */}
+                        <button onClick={() => setSaveModalOpen(true)}
+                            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-indigo-500 hover:bg-indigo-600 text-white transition-all shadow-md shadow-indigo-500/25">
+                            <Icon name="save" className="w-3.5 h-3.5" />
+                            <span className="hidden sm:inline">{t.save}</span>
+                        </button>
+                    </div>
+                </div>
+            </header>
+
+            <main className="max-w-[1600px] mx-auto px-4 sm:px-6 py-6 space-y-6">
+                {/* ═══ TOP CONTROLS ═══ */}
+                <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
+                    {/* Currency Pair */}
+                    <div className={`rounded-2xl p-5 ${dark ? 'bg-night-800 border border-slate-700/50' : 'bg-white border border-slate-200/60'} shadow-sm`}>
+                        <label className={`text-xs font-semibold uppercase tracking-wider ${dark ? 'text-slate-400' : 'text-slate-500'}`}>{t.currencyPair}</label>
+                        <div className="flex items-center gap-2 mt-3">
+                            <select value={baseCcy} onChange={e => { if (e.target.value !== quoteCcy) setBaseCcy(e.target.value); }}
+                                className={`flex-1 px-3 py-2 rounded-xl text-sm font-semibold appearance-none pr-7 ${dark ? 'bg-slate-700 border-slate-600 text-slate-200' : 'bg-slate-50 border-slate-200 text-slate-800'} border focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-500 outline-none`}>
+                                {CURRENCIES.filter(c => c !== quoteCcy).map(c => (
+                                    <option key={c} value={c}>{CCY_FLAGS[c]} {c}</option>
+                                ))}
+                            </select>
+                            <div className={`p-1 ${dark ? 'text-slate-500' : 'text-slate-300'}`}>
+                                <Icon name="arrowRight" className="w-5 h-5" />
+                            </div>
+                            <select value={quoteCcy} onChange={e => { if (e.target.value !== baseCcy) setQuoteCcy(e.target.value); }}
+                                className={`flex-1 px-3 py-2 rounded-xl text-sm font-semibold appearance-none pr-7 ${dark ? 'bg-slate-700 border-slate-600 text-slate-200' : 'bg-slate-50 border-slate-200 text-slate-800'} border focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-500 outline-none`}>
+                                {CURRENCIES.filter(c => c !== baseCcy).map(c => (
+                                    <option key={c} value={c}>{CCY_FLAGS[c]} {c}</option>
+                                ))}
+                            </select>
+                        </div>
+                    </div>
+
+                    {/* Spot Rate */}
+                    <div className={`rounded-2xl p-5 ${dark ? 'bg-night-800 border border-slate-700/50' : 'bg-white border border-slate-200/60'} shadow-sm`}>
+                        <label className={`text-xs font-semibold uppercase tracking-wider ${dark ? 'text-slate-400' : 'text-slate-500'}`}>{t.spotToday}</label>
+                        <div className="mt-3">
+                            <input type="number" step="0.0001" value={spot} onChange={e => setSpot(parseFloat(e.target.value) || 0)}
+                                className={`w-full px-3 py-2 rounded-xl font-mono text-xl font-bold ${dark ? 'bg-slate-700 border-slate-600 text-emerald-400' : 'bg-slate-50 border-slate-200 text-emerald-600'} border focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-500 outline-none`} />
+                        </div>
+                        <p className={`text-[10px] mt-1.5 ${dark ? 'text-slate-500' : 'text-slate-400'}`}>{CCY_FLAGS[baseCcy]} 1 {baseCcy} = {CCY_FLAGS[quoteCcy]} {formatRate(spot, pairStr)} {quoteCcy}</p>
+                    </div>
+
+                    {/* Fees */}
+                    <div className={`rounded-2xl p-5 ${dark ? 'bg-night-800 border border-slate-700/50' : 'bg-white border border-slate-200/60'} shadow-sm`}>
+                        <label className={`text-xs font-semibold uppercase tracking-wider ${dark ? 'text-slate-400' : 'text-slate-500'}`}>{t.fees}</label>
+                        <div className="mt-3">
+                            <div className="relative">
+                                <input type="number" step="0.01" value={feePercent} onChange={e => setFeePercent(parseFloat(e.target.value) || 0)}
+                                    className={`w-full px-3 py-2 pr-8 rounded-xl font-mono text-lg font-semibold ${dark ? 'bg-slate-700 border-slate-600 text-amber-400' : 'bg-slate-50 border-slate-200 text-amber-600'} border focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-500 outline-none`} />
+                                <span className={`absolute right-3 top-1/2 -translate-y-1/2 text-sm font-bold ${dark ? 'text-slate-500' : 'text-slate-400'}`}>%</span>
+                            </div>
+                        </div>
+                        <p className={`text-[10px] mt-1.5 ${dark ? 'text-slate-500' : 'text-slate-400'}`}>{t.feeMarkup} → {formatRate(calcFeePoints(spot, feePercent), pairStr)} pts</p>
+                    </div>
+
+                    {/* Interest Rates Preview */}
+                    <div className={`rounded-2xl p-5 cursor-pointer card-hover ${dark ? 'bg-night-800 border border-slate-700/50' : 'bg-white border border-slate-200/60'} shadow-sm`}
+                        onClick={() => setShowRates(!showRates)}>
+                        <div className="flex items-center justify-between">
+                            <label className={`text-xs font-semibold uppercase tracking-wider ${dark ? 'text-slate-400' : 'text-slate-500'}`}>{t.interestRates}</label>
+                            <Icon name={showRates ? 'chevronUp' : 'chevronDown'} className={`w-4 h-4 ${dark ? 'text-slate-500' : 'text-slate-400'}`} />
+                        </div>
+                        <div className="mt-3 space-y-1.5">
+                            <div className="flex items-center justify-between">
+                                <span className="text-sm">{CCY_FLAGS[baseCcy]} {baseCcy}</span>
+                                <span className={`font-mono text-sm font-bold ${dark ? 'text-sky-400' : 'text-sky-600'}`}>{formatNumber(rateBase)}%</span>
+                            </div>
+                            <div className="flex items-center justify-between">
+                                <span className="text-sm">{CCY_FLAGS[quoteCcy]} {quoteCcy}</span>
+                                <span className={`font-mono text-sm font-bold ${dark ? 'text-sky-400' : 'text-sky-600'}`}>{formatNumber(rateQuote)}%</span>
+                            </div>
+                            <div className={`text-xs font-medium mt-1 ${differential > 0 ? 'text-emerald-500' : differential < 0 ? 'text-red-400' : (dark ? 'text-slate-400' : 'text-slate-500')}`}>
+                                Δ {diffSign}{formatNumber(differential)}% → {differential > 0 ? t.premium : t.discount}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                {/* ═══ INTEREST RATES EDITOR (Collapsible) ═══ */}
+                {showRates && (
+                    <div className={`rounded-2xl p-5 fade-in ${dark ? 'bg-night-800 border border-slate-700/50' : 'bg-white border border-slate-200/60'} shadow-sm`}>
+                        <div className="flex items-center justify-between mb-4">
+                            <h3 className="text-sm font-bold">{t.editRates}</h3>
+                            <button onClick={() => { setRates({ ...DEFAULT_RATES }); showToast(t.resetRates); }}
+                                className={`flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-medium ${dark ? 'bg-slate-700 hover:bg-slate-600 text-slate-300' : 'bg-slate-100 hover:bg-slate-200 text-slate-600'}`}>
+                                <Icon name="refresh" className="w-3 h-3" />
+                                {t.reset}
+                            </button>
+                        </div>
+                        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">
+                            {CURRENCIES.map(ccy => (
+                                <div key={ccy} className={`flex items-center gap-2 p-2 rounded-xl ${dark ? 'bg-slate-700/50' : 'bg-slate-50'}`}>
+                                    <span className="text-sm">{CCY_FLAGS[ccy]}</span>
+                                    <span className={`text-xs font-semibold w-8 ${ccy === baseCcy || ccy === quoteCcy ? (dark ? 'text-indigo-400' : 'text-indigo-600') : ''}`}>{ccy}</span>
+                                    <input type="number" step="0.05" value={rates[ccy]}
+                                        onChange={e => setRates({ ...rates, [ccy]: parseFloat(e.target.value) || 0 })}
+                                        className={`flex-1 w-full px-2 py-1 rounded-lg text-xs font-mono font-bold text-right ${dark ? 'bg-slate-800 border-slate-600 text-slate-200' : 'bg-white border-slate-200 text-slate-800'} border focus:ring-2 focus:ring-indigo-500/30 outline-none`} />
+                                    <span className={`text-[10px] ${dark ? 'text-slate-500' : 'text-slate-400'}`}>%</span>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                )}
+
+                {/* ═══ TRANCHES TABLE ═══ */}
+                <div className={`rounded-2xl overflow-hidden ${dark ? 'bg-night-800 border border-slate-700/50' : 'bg-white border border-slate-200/60'} shadow-sm`}>
+                    <div className="p-5 flex items-center justify-between border-b border-slate-200/60 dark:border-slate-700/50">
+                        <div>
+                            <h2 className="text-base font-bold">{t.tranches}</h2>
+                            <p className={`text-xs mt-0.5 ${dark ? 'text-slate-400' : 'text-slate-500'}`}>{CCY_FLAGS[baseCcy]} {baseCcy} → {CCY_FLAGS[quoteCcy]} {quoteCcy} • {t.spotRate}: {formatRate(spot, pairStr)}</p>
+                        </div>
+                        <div className="flex items-center gap-2">
+                            <button onClick={copyToClipboard}
+                                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${dark ? 'bg-slate-700 hover:bg-slate-600 text-slate-300' : 'bg-slate-100 hover:bg-slate-200 text-slate-600'}`}>
+                                <Icon name="copy" className="w-3.5 h-3.5" />
+                                {t.copyStrategy}
+                            </button>
+                            <button onClick={addTranche}
+                                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-indigo-500 hover:bg-indigo-600 text-white transition-all shadow-md shadow-indigo-500/25">
+                                <Icon name="plus" className="w-3.5 h-3.5" />
+                                {t.addTranche}
+                            </button>
+                        </div>
+                    </div>
+
+                    <div className="overflow-x-auto">
+                        <table className="w-full text-sm">
+                            <thead>
+                                <tr className={dark ? 'bg-slate-800/50' : 'bg-slate-50/80'}>
+                                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">#</th>
+                                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">{t.startDate}</th>
+                                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">{t.endDate}</th>
+                                    <th className="px-4 py-3 text-center text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">{t.direction}</th>
+                                    <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">{t.notional} ({baseCcy})</th>
+                                    <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">{t.days}</th>
+                                    <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">{t.fwdPoints}</th>
+                                    <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">{t.feePts}</th>
+                                    <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">{t.fwdRate}</th>
+                                    <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">{t.value} ({quoteCcy})</th>
+                                    <th className="px-4 py-3 text-center text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400"></th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-slate-100 dark:divide-slate-700/50">
+                                {computedTranches.map((tr, i) => (
+                                    <tr key={tr.id} className={`${dark ? 'hover:bg-slate-800/40' : 'hover:bg-slate-50/50'} transition-colors`}>
+                                        <td className="px-4 py-3">
+                                            <span className={`inline-flex items-center justify-center w-6 h-6 rounded-lg text-xs font-bold ${dark ? 'bg-indigo-900/40 text-indigo-400' : 'bg-indigo-50 text-indigo-600'}`}>
+                                                {i + 1}
+                                            </span>
+                                        </td>
+                                        <td className="px-4 py-3">
+                                            <input type="date" value={tr.startDate}
+                                                onChange={e => updateTranche(tr.id, 'startDate', e.target.value)}
+                                                className={`px-2 py-1 rounded-lg text-xs font-mono ${dark ? 'bg-slate-700 border-slate-600 text-slate-200' : 'bg-slate-50 border-slate-200 text-slate-700'} border focus:ring-2 focus:ring-indigo-500/30 outline-none`} />
+                                        </td>
+                                        <td className="px-4 py-3">
+                                            <input type="date" value={tr.endDate}
+                                                onChange={e => updateTranche(tr.id, 'endDate', e.target.value)}
+                                                className={`px-2 py-1 rounded-lg text-xs font-mono ${dark ? 'bg-slate-700 border-slate-600 text-slate-200' : 'bg-slate-50 border-slate-200 text-slate-700'} border focus:ring-2 focus:ring-indigo-500/30 outline-none`} />
+                                        </td>
+                                        <td className="px-4 py-3 text-center">
+                                            <select value={tr.direction} onChange={e => updateTranche(tr.id, 'direction', e.target.value)}
+                                                className={`px-2 py-1 rounded-lg text-xs font-semibold appearance-none pr-6 ${
+                                                    tr.direction === 'buy'
+                                                        ? (dark ? 'bg-emerald-900/40 border-emerald-700 text-emerald-400' : 'bg-emerald-50 border-emerald-200 text-emerald-700')
+                                                        : (dark ? 'bg-red-900/40 border-red-700 text-red-400' : 'bg-red-50 border-red-200 text-red-700')
+                                                } border focus:ring-2 focus:ring-indigo-500/30 outline-none`}>
+                                                <option value="buy">{t.buy}</option>
+                                                <option value="sell">{t.sell}</option>
+                                            </select>
+                                        </td>
+                                        <td className="px-4 py-3 text-right">
+                                            <input type="number" step="1000" value={tr.notional}
+                                                onChange={e => updateTranche(tr.id, 'notional', parseFloat(e.target.value) || 0)}
+                                                className={`w-28 px-2 py-1 rounded-lg text-xs font-mono font-bold text-right ${dark ? 'bg-slate-700 border-slate-600 text-slate-200' : 'bg-slate-50 border-slate-200 text-slate-800'} border focus:ring-2 focus:ring-indigo-500/30 outline-none`} />
+                                        </td>
+                                        <td className={`px-4 py-3 text-right font-mono text-xs ${dark ? 'text-slate-400' : 'text-slate-500'}`}>
+                                            {tr.days}
+                                        </td>
+                                        <td className={`px-4 py-3 text-right font-mono text-xs font-semibold ${tr.forwardPoints >= 0 ? 'text-emerald-500' : 'text-red-400'}`}>
+                                            {tr.forwardPoints >= 0 ? '+' : ''}{formatRate(tr.forwardPoints, pairStr)}
+                                        </td>
+                                        <td className={`px-4 py-3 text-right font-mono text-xs ${dark ? 'text-amber-400' : 'text-amber-600'}`}>
+                                            {tr.direction === 'buy' ? '+' : '-'}{formatRate(tr.feePoints, pairStr)}
+                                        </td>
+                                        <td className={`px-4 py-3 text-right font-mono text-sm font-bold ${dark ? 'text-slate-100' : 'text-slate-900'}`}>
+                                            {formatRate(tr.forwardRate, pairStr)}
+                                        </td>
+                                        <td className={`px-4 py-3 text-right font-mono text-xs ${dark ? 'text-slate-300' : 'text-slate-700'}`}>
+                                            {formatNumber(tr.notionalValue, 0)}
+                                        </td>
+                                        <td className="px-4 py-3 text-center">
+                                            {tranches.length > 1 && (
+                                                <button onClick={() => removeTranche(tr.id)}
+                                                    className={`p-1.5 rounded-lg transition-all ${dark ? 'hover:bg-red-900/40 text-slate-500 hover:text-red-400' : 'hover:bg-red-50 text-slate-400 hover:text-red-500'}`}>
+                                                    <Icon name="trash" className="w-3.5 h-3.5" />
+                                                </button>
+                                            )}
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+
+                    {/* Summary row */}
+                    {summary && (
+                        <div className={`px-5 py-4 border-t ${dark ? 'bg-slate-800/30 border-slate-700/50' : 'bg-indigo-50/30 border-slate-200/60'}`}>
+                            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                                <div>
+                                    <p className={`text-[10px] uppercase tracking-wider font-semibold ${dark ? 'text-slate-400' : 'text-slate-500'}`}>{t.totalNotional}</p>
+                                    <p className="font-mono text-base font-bold mt-0.5">{formatNumber(summary.totalNotional, 0)} <span className={`text-xs ${dark ? 'text-slate-400' : 'text-slate-500'}`}>{baseCcy}</span></p>
+                                </div>
+                                <div>
+                                    <p className={`text-[10px] uppercase tracking-wider font-semibold ${dark ? 'text-slate-400' : 'text-slate-500'}`}>{t.weightedAvgRate}</p>
+                                    <p className={`font-mono text-base font-bold mt-0.5 ${dark ? 'text-indigo-400' : 'text-indigo-600'}`}>{formatRate(summary.weightedRate, pairStr)}</p>
+                                </div>
+                                <div>
+                                    <p className={`text-[10px] uppercase tracking-wider font-semibold ${dark ? 'text-slate-400' : 'text-slate-500'}`}>{t.totalValue}</p>
+                                    <p className="font-mono text-base font-bold mt-0.5">{formatNumber(summary.totalValue, 0)} <span className={`text-xs ${dark ? 'text-slate-400' : 'text-slate-500'}`}>{quoteCcy}</span></p>
+                                </div>
+                                <div>
+                                    <p className={`text-[10px] uppercase tracking-wider font-semibold ${dark ? 'text-slate-400' : 'text-slate-500'}`}>{t.vsSpot}</p>
+                                    <p className={`font-mono text-base font-bold mt-0.5 ${summary.vsSpot >= 0 ? 'text-emerald-500' : 'text-red-400'}`}>
+                                        {summary.vsSpot >= 0 ? '+' : ''}{formatRate(summary.vsSpot, pairStr)}
+                                        <span className="text-xs ml-1">({summary.vsSpotPct >= 0 ? '+' : ''}{formatNumber(summary.vsSpotPct)}%)</span>
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+                </div>
+
+                {/* ═══ MARGIN CALL SECTION ═══ */}
+                <div className={`rounded-2xl overflow-hidden ${dark ? 'bg-night-800 border border-slate-700/50' : 'bg-white border border-slate-200/60'} shadow-sm`}>
+                    <div className="p-5 border-b border-slate-200/60 dark:border-slate-700/50">
+                        <div className="flex items-center gap-3">
+                            <div className={`w-8 h-8 rounded-xl flex items-center justify-center ${dark ? 'bg-amber-900/40' : 'bg-amber-50'}`}>
+                                <Icon name="alertTriangle" className={`w-4 h-4 ${dark ? 'text-amber-400' : 'text-amber-600'}`} />
+                            </div>
+                            <div>
+                                <h2 className="text-base font-bold">{t.marginCalculator}</h2>
+                                <p className={`text-xs mt-0.5 ${dark ? 'text-slate-400' : 'text-slate-500'}`}>{t.marginCall}</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="p-5 space-y-5">
+                        {/* Margin parameters */}
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <div>
+                                <label className={`text-xs font-semibold ${dark ? 'text-slate-400' : 'text-slate-500'}`}>{t.marginDeposit}</label>
+                                <div className="relative mt-1">
+                                    <input type="number" step="0.5" value={marginPct} onChange={e => setMarginPct(parseFloat(e.target.value) || 0)}
+                                        className={`w-full px-3 py-2 pr-8 rounded-xl font-mono text-sm font-semibold ${dark ? 'bg-slate-700 border-slate-600 text-slate-200' : 'bg-slate-50 border-slate-200 text-slate-800'} border focus:ring-2 focus:ring-indigo-500/30 outline-none`} />
+                                    <span className={`absolute right-3 top-1/2 -translate-y-1/2 text-sm ${dark ? 'text-slate-500' : 'text-slate-400'}`}>%</span>
+                                </div>
+                            </div>
+                            <div>
+                                <label className={`text-xs font-semibold ${dark ? 'text-slate-400' : 'text-slate-500'}`}>{t.marginTrigger}</label>
+                                <div className="relative mt-1">
+                                    <input type="number" step="5" value={marginTrigger} onChange={e => setMarginTrigger(parseFloat(e.target.value) || 0)}
+                                        className={`w-full px-3 py-2 pr-8 rounded-xl font-mono text-sm font-semibold ${dark ? 'bg-slate-700 border-slate-600 text-slate-200' : 'bg-slate-50 border-slate-200 text-slate-800'} border focus:ring-2 focus:ring-indigo-500/30 outline-none`} />
+                                    <span className={`absolute right-3 top-1/2 -translate-y-1/2 text-sm ${dark ? 'text-slate-500' : 'text-slate-400'}`}>%</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Per-tranche margin table */}
+                        <div className="overflow-x-auto">
+                            <table className="w-full text-sm">
+                                <thead>
+                                    <tr className={dark ? 'bg-slate-800/50' : 'bg-slate-50/80'}>
+                                        <th className="px-4 py-2 text-left text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">{t.tranche}</th>
+                                        <th className="px-4 py-2 text-right text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">{t.contractValue}</th>
+                                        <th className="px-4 py-2 text-right text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">{t.initialDeposit}</th>
+                                        <th className="px-4 py-2 text-right text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">{t.firstMC}</th>
+                                        <th className="px-4 py-2 text-right text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">{t.secondMC}</th>
+                                        <th className="px-4 py-2 text-right text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">{t.thirdMC}</th>
+                                        <th className="px-4 py-2 text-center text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">{t.riskLevel}</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-slate-100 dark:divide-slate-700/50">
+                                    {computedTranches.map((tr, i) => (
+                                        <tr key={tr.id} className={`${dark ? 'hover:bg-slate-800/40' : 'hover:bg-slate-50/50'} transition-colors`}>
+                                            <td className="px-4 py-3">
+                                                <span className={`inline-flex items-center justify-center w-6 h-6 rounded-lg text-xs font-bold ${dark ? 'bg-indigo-900/40 text-indigo-400' : 'bg-indigo-50 text-indigo-600'}`}>{i + 1}</span>
+                                            </td>
+                                            <td className="px-4 py-3 text-right font-mono text-xs">{formatNumber(tr.margin.contractValue, 0)} {quoteCcy}</td>
+                                            <td className="px-4 py-3 text-right font-mono text-xs font-semibold">{formatNumber(tr.margin.initialDeposit, 0)} {quoteCcy}</td>
+                                            <td className={`px-4 py-3 text-right font-mono text-xs font-bold ${dark ? 'text-amber-400' : 'text-amber-600'}`}>{formatRate(tr.margin.mc1Spot, pairStr)}</td>
+                                            <td className={`px-4 py-3 text-right font-mono text-xs font-bold ${dark ? 'text-orange-400' : 'text-orange-600'}`}>{formatRate(tr.margin.mc2Spot, pairStr)}</td>
+                                            <td className={`px-4 py-3 text-right font-mono text-xs font-bold ${dark ? 'text-red-400' : 'text-red-600'}`}>{formatRate(tr.margin.mc3Spot, pairStr)}</td>
+                                            <td className="px-4 py-3 text-center">
+                                                <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold border ${riskBg(tr.margin.riskLevel)}`}>
+                                                    <span className={`w-1.5 h-1.5 rounded-full ${
+                                                        tr.margin.riskLevel === 'low' ? 'bg-emerald-500' :
+                                                        tr.margin.riskLevel === 'medium' ? 'bg-amber-500' :
+                                                        tr.margin.riskLevel === 'high' ? 'bg-orange-500' : 'bg-red-500'
+                                                    }`} />
+                                                    <span className={riskColor(tr.margin.riskLevel)}>{riskLabel(tr.margin.riskLevel)}</span>
+                                                </span>
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+
+                        {/* Total margin summary */}
+                        {summary && (
+                            <div className={`grid grid-cols-1 sm:grid-cols-3 gap-4 p-4 rounded-xl ${dark ? 'bg-slate-800/50' : 'bg-amber-50/50'}`}>
+                                <div className="text-center">
+                                    <p className={`text-[10px] uppercase tracking-wider font-semibold ${dark ? 'text-slate-400' : 'text-slate-500'}`}>{t.contractValue}</p>
+                                    <p className="font-mono text-sm font-bold mt-1">{formatNumber(summary.totalContractValue, 0)} {quoteCcy}</p>
+                                </div>
+                                <div className="text-center">
+                                    <p className={`text-[10px] uppercase tracking-wider font-semibold ${dark ? 'text-slate-400' : 'text-slate-500'}`}>{t.initialDeposit}</p>
+                                    <p className={`font-mono text-sm font-bold mt-1 ${dark ? 'text-amber-400' : 'text-amber-600'}`}>{formatNumber(summary.totalDeposit, 0)} {quoteCcy}</p>
+                                </div>
+                                <div className="text-center">
+                                    <p className={`text-[10px] uppercase tracking-wider font-semibold ${dark ? 'text-slate-400' : 'text-slate-500'}`}>{t.marginDeposit}</p>
+                                    <p className="font-mono text-sm font-bold mt-1">{marginPct}%</p>
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                </div>
+
+                {/* ═══ SAVED STRATEGIES PANEL ═══ */}
+                {showSaved && (
+                    <div className={`rounded-2xl overflow-hidden fade-in ${dark ? 'bg-night-800 border border-slate-700/50' : 'bg-white border border-slate-200/60'} shadow-sm`}>
+                        <div className="p-5 border-b border-slate-200/60 dark:border-slate-700/50 flex items-center justify-between">
+                            <div className="flex items-center gap-3">
+                                <Icon name="folder" className={`w-5 h-5 ${dark ? 'text-indigo-400' : 'text-indigo-500'}`} />
+                                <h2 className="text-base font-bold">{t.savedStrategies}</h2>
+                            </div>
+                            <button onClick={() => setShowSaved(false)} className={`p-1.5 rounded-lg ${dark ? 'hover:bg-slate-700' : 'hover:bg-slate-100'}`}>
+                                <Icon name="x" className="w-4 h-4 text-slate-400" />
+                            </button>
+                        </div>
+                        {savedStrategies.length === 0 ? (
+                            <div className="p-10 text-center">
+                                <Icon name="folder" className={`w-10 h-10 mx-auto mb-3 ${dark ? 'text-slate-600' : 'text-slate-300'}`} />
+                                <p className={`text-sm ${dark ? 'text-slate-500' : 'text-slate-400'}`}>{t.noSaved}</p>
+                            </div>
+                        ) : (
+                            <div className="divide-y divide-slate-100 dark:divide-slate-700/50">
+                                {savedStrategies.map(s => (
+                                    <div key={s.id} className={`px-5 py-3 flex items-center justify-between ${dark ? 'hover:bg-slate-800/40' : 'hover:bg-slate-50/50'} transition-colors`}>
+                                        <div className="flex items-center gap-4">
+                                            <div>
+                                                <p className="text-sm font-semibold">{s.name}</p>
+                                                <p className={`text-xs ${dark ? 'text-slate-400' : 'text-slate-500'}`}>
+                                                    {s.date} • {CCY_FLAGS[s.baseCcy]} {s.baseCcy}/{CCY_FLAGS[s.quoteCcy]} {s.quoteCcy} • {s.tranches.length} {t.tranches.toLowerCase()}
+                                                </p>
+                                            </div>
+                                        </div>
+                                        <div className="flex items-center gap-2">
+                                            <button onClick={() => loadStrategy(s)}
+                                                className={`px-3 py-1 rounded-lg text-xs font-semibold ${dark ? 'bg-indigo-900/40 hover:bg-indigo-900/60 text-indigo-400' : 'bg-indigo-50 hover:bg-indigo-100 text-indigo-600'} transition-all`}>
+                                                {t.load}
+                                            </button>
+                                            <button onClick={() => deleteStrategy(s.id)}
+                                                className={`px-3 py-1 rounded-lg text-xs font-semibold ${dark ? 'bg-red-900/40 hover:bg-red-900/60 text-red-400' : 'bg-red-50 hover:bg-red-100 text-red-600'} transition-all`}>
+                                                {t.delete}
+                                            </button>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                    </div>
+                )}
+
+                {/* Footer */}
+                <footer className={`text-center py-6 text-xs ${dark ? 'text-slate-600' : 'text-slate-400'}`}>
+                    FX Hedging Pro • {t.parity} • {new Date().getFullYear()}
+                </footer>
+            </main>
+
+            {/* ═══ SAVE MODAL ═══ */}
+            <Modal open={saveModalOpen} onClose={() => setSaveModalOpen(false)} title={t.save + ' — ' + t.strategyName}>
+                <div className="space-y-4">
+                    <input type="text" placeholder={t.enterName} value={saveName} onChange={e => setSaveName(e.target.value)}
+                        onKeyDown={e => e.key === 'Enter' && saveStrategy()}
+                        autoFocus
+                        className={`w-full px-4 py-3 rounded-xl text-sm font-medium ${dark ? 'bg-slate-700 border-slate-600 text-slate-200 placeholder-slate-500' : 'bg-slate-50 border-slate-200 text-slate-800 placeholder-slate-400'} border focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-500 outline-none`} />
+                    <div className={`p-3 rounded-xl text-xs ${dark ? 'bg-slate-700/50 text-slate-400' : 'bg-slate-50 text-slate-500'}`}>
+                        {CCY_FLAGS[baseCcy]} {baseCcy}/{CCY_FLAGS[quoteCcy]} {quoteCcy} • {t.spotRate}: {formatRate(spot, pairStr)} • {computedTranches.length} {t.tranches.toLowerCase()}
+                    </div>
+                    <div className="flex gap-3 justify-end">
+                        <button onClick={() => setSaveModalOpen(false)}
+                            className={`px-4 py-2 rounded-xl text-sm font-semibold ${dark ? 'bg-slate-700 hover:bg-slate-600 text-slate-300' : 'bg-slate-100 hover:bg-slate-200 text-slate-600'} transition-all`}>
+                            {t.cancel}
+                        </button>
+                        <button onClick={saveStrategy}
+                            className="px-4 py-2 rounded-xl text-sm font-semibold bg-indigo-500 hover:bg-indigo-600 text-white transition-all shadow-md shadow-indigo-500/25">
+                            {t.confirm}
+                        </button>
+                    </div>
+                </div>
+            </Modal>
+        </div>
+    );
+};
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+</script>
+</body>
+</html>
