@@ -515,6 +515,10 @@ const App = () => {
         setIsLive(false);
     };
 
+    const adjustFee = (direction) => {
+        setFeePercent(prev => Math.max(0, parseFloat((prev + (direction * 0.1)).toFixed(2))));
+    };
+
     // Live Spot Fetching
     useEffect(() => {
         let fetchInterval, tickInterval;
@@ -613,14 +617,17 @@ const App = () => {
             const rBase = rates[baseCcy] || 0;
             const rQuote = rates[quoteCcy] || 0;
             const calc = calcForwardRate(spot, rBase, rQuote, d, feePercent, tr.direction);
-            const notionalValue = tr.notional * calc.forwardRate;
             
-            const mc = calcMarginCall(tr.notional, calc.forwardRate, spot, tr.direction, marginPct, marginTrigger);
+            const finalForwardRate = tr.customForwardRate !== undefined ? tr.customForwardRate : calc.forwardRate;
+            const notionalValue = tr.notional * finalForwardRate;
+            
+            const mc = calcMarginCall(tr.notional, finalForwardRate, spot, tr.direction, marginPct, marginTrigger);
 
             return {
                 ...tr,
                 days: d,
                 ...calc,
+                forwardRate: finalForwardRate,
                 notionalValue,
                 margin: mc
             };
@@ -852,12 +859,16 @@ const App = () => {
                     {/* Fees */}
                     <div className={`rounded-2xl p-5 ${dark ? 'bg-night-800 border border-slate-700/50' : 'bg-white border border-slate-200/60'} shadow-sm`}>
                         <label className={`text-xs font-semibold uppercase tracking-wider ${dark ? 'text-slate-400' : 'text-slate-500'}`}>{t.fees}</label>
-                        <div className="mt-3">
-                            <div className="relative">
-                                <input type="number" step="0.01" value={feePercent} onChange={e => setFeePercent(parseFloat(e.target.value) || 0)}
-                                    className={`w-full px-3 py-2 pr-8 rounded-xl font-mono text-lg font-semibold ${dark ? 'bg-slate-700 border-slate-600 text-amber-400' : 'bg-slate-50 border-slate-200 text-amber-600'} border focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-500 outline-none`} />
-                                <span className={`absolute right-3 top-1/2 -translate-y-1/2 text-sm font-bold ${dark ? 'text-slate-500' : 'text-slate-400'}`}>%</span>
-                            </div>
+                        <div className="mt-3 relative flex items-center">
+                            <button onClick={() => adjustFee(-1)} className={`absolute left-2 p-1.5 rounded-lg z-10 transition-colors ${dark ? 'text-slate-400 hover:bg-slate-600 hover:text-white' : 'text-slate-500 hover:bg-slate-200 hover:text-slate-800'}`}>
+                                <Icon name="chevronDown" className="w-4 h-4" />
+                            </button>
+                            <input type="number" step="0.1" value={feePercent} onChange={e => setFeePercent(parseFloat(e.target.value) || 0)}
+                                className={`w-full px-10 py-2 text-center rounded-xl font-mono text-lg font-semibold ${dark ? 'bg-slate-700 border-slate-600 text-amber-400' : 'bg-slate-50 border-slate-200 text-amber-600'} border focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-500 outline-none`} />
+                            <button onClick={() => adjustFee(1)} className={`absolute right-2 p-1.5 rounded-lg z-10 transition-colors ${dark ? 'text-slate-400 hover:bg-slate-600 hover:text-white' : 'text-slate-500 hover:bg-slate-200 hover:text-slate-800'}`}>
+                                <Icon name="chevronUp" className="w-4 h-4" />
+                            </button>
+                            <span className={`absolute right-10 top-1/2 -translate-y-1/2 text-sm font-bold ${dark ? 'text-slate-500' : 'text-slate-400'}`}>%</span>
                         </div>
                         <p className={`text-[10px] mt-1.5 ${dark ? 'text-slate-500' : 'text-slate-400'}`}>{t.feeMarkup} → {formatRate(calcFeePoints(spot, feePercent), pairStr)} pts</p>
                     </div>
@@ -992,8 +1003,18 @@ const App = () => {
                                         <td className={`px-4 py-3 text-right font-mono text-xs ${dark ? 'text-amber-400' : 'text-amber-600'}`}>
                                             {tr.direction === 'buy' ? '+' : '-'}{formatRate(tr.feePoints, pairStr)}
                                         </td>
-                                        <td className={`px-4 py-3 text-right font-mono text-sm font-bold ${dark ? 'text-slate-100' : 'text-slate-900'}`}>
-                                            {formatRate(tr.forwardRate, pairStr)}
+                                        <td className="px-4 py-3 text-right">
+                                            <input type="number" step="0.0001" 
+                                                value={tr.customForwardRate !== undefined ? tr.customForwardRate : parseFloat(tr.forwardRate.toFixed(4))}
+                                                onChange={e => {
+                                                    const val = e.target.value;
+                                                    updateTranche(tr.id, 'customForwardRate', val === '' ? undefined : parseFloat(val));
+                                                }}
+                                                className={`w-28 px-2 py-1 rounded-lg text-xs font-mono font-bold text-right transition-colors ${
+                                                    tr.customForwardRate !== undefined 
+                                                        ? 'bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-400 border-amber-300 dark:border-amber-700' 
+                                                        : (dark ? 'bg-slate-700 border-slate-600 text-slate-200' : 'bg-slate-50 border-slate-200 text-slate-800')
+                                                } border focus:ring-2 focus:ring-indigo-500/30 outline-none`} />
                                         </td>
                                         <td className={`px-4 py-3 text-right font-mono text-xs ${dark ? 'text-slate-300' : 'text-slate-700'}`}>
                                             {formatNumber(tr.notionalValue, 0)}
