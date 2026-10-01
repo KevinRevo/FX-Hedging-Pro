@@ -494,7 +494,7 @@ const App = () => {
     const [spot, setSpot] = useState(1.0850);
     const [isLive, setIsLive] = useState(true);
     const baseSpotRef = useRef(1.0850);
-    const [feePercent, setFeePercent] = useState(0.15);
+    const [feePercent, setFeePercent] = useState(0.80);
     const [marginPct, setMarginPct] = useState(5);
     const [marginTrigger, setMarginTrigger] = useState(5);
 
@@ -509,6 +509,12 @@ const App = () => {
 
     const [tranches, setTranches] = useState([createDefaultTranche(0)]);
 
+    const adjustSpot = (direction) => {
+        const pip = (quoteCcy === 'HUF' || quoteCcy === 'CZK') ? 0.01 : 0.0001;
+        setSpot(prev => parseFloat((prev + (direction * pip)).toFixed(pip === 0.01 ? 2 : 4)));
+        setIsLive(false);
+    };
+
     // Live Spot Fetching
     useEffect(() => {
         let fetchInterval, tickInterval;
@@ -521,6 +527,33 @@ const App = () => {
                 return;
             }
             try {
+                // TradingView interbank prices
+                const tvBody = {
+                    symbols: { tickers: [`FX_IDC:${baseCcy}${quoteCcy}`, `FX_IDC:${quoteCcy}${baseCcy}`] },
+                    columns: ["close"]
+                };
+                const tvRes = await fetch("https://scanner.tradingview.com/forex/scan", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(tvBody)
+                });
+                const tvData = await tvRes.json();
+                if (tvData && tvData.data && tvData.data.length > 0) {
+                    const match = tvData.data.find(d => d.s === `FX_IDC:${baseCcy}${quoteCcy}`);
+                    if (match) {
+                        baseSpotRef.current = match.d[0];
+                        setSpot(baseSpotRef.current);
+                        return;
+                    }
+                    const invMatch = tvData.data.find(d => d.s === `FX_IDC:${quoteCcy}${baseCcy}`);
+                    if (invMatch && invMatch.d[0] !== 0) {
+                        baseSpotRef.current = 1 / invMatch.d[0];
+                        setSpot(baseSpotRef.current);
+                        return;
+                    }
+                }
+                
+                // Fallback ER-API
                 const res = await fetch(`https://open.er-api.com/v6/latest/${baseCcy}`);
                 const data = await res.json();
                 if (data && data.rates && data.rates[quoteCcy]) {
@@ -799,13 +832,19 @@ const App = () => {
                                 {isLive ? t.live : t.manual}
                             </button>
                         </div>
-                        <div className="mt-3 relative">
+                        <div className="mt-3 relative flex items-center">
+                            <button onClick={() => adjustSpot(-1)} className={`absolute left-2 p-1.5 rounded-lg z-10 transition-colors ${dark ? 'text-slate-400 hover:bg-slate-600 hover:text-white' : 'text-slate-500 hover:bg-slate-200 hover:text-slate-800'}`}>
+                                <Icon name="chevronDown" className="w-4 h-4" />
+                            </button>
                             <input type="number" step="0.0001" value={spot} 
                                 onChange={e => {
                                     setSpot(parseFloat(e.target.value) || 0);
                                     setIsLive(false);
                                 }}
-                                className={`w-full px-3 py-2 rounded-xl font-mono text-xl font-bold ${dark ? 'bg-slate-700 border-slate-600 text-emerald-400' : 'bg-slate-50 border-slate-200 text-emerald-600'} border focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-500 outline-none transition-colors duration-100`} />
+                                className={`w-full px-10 py-2 text-center rounded-xl font-mono text-xl font-bold ${dark ? 'bg-slate-700 border-slate-600 text-emerald-400' : 'bg-slate-50 border-slate-200 text-emerald-600'} border focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-500 outline-none transition-colors duration-100`} />
+                            <button onClick={() => adjustSpot(1)} className={`absolute right-2 p-1.5 rounded-lg z-10 transition-colors ${dark ? 'text-slate-400 hover:bg-slate-600 hover:text-white' : 'text-slate-500 hover:bg-slate-200 hover:text-slate-800'}`}>
+                                <Icon name="chevronUp" className="w-4 h-4" />
+                            </button>
                         </div>
                         <p className={`text-[10px] mt-1.5 ${dark ? 'text-slate-500' : 'text-slate-400'}`}>{CCY_FLAGS[baseCcy]} 1 {baseCcy} = {CCY_FLAGS[quoteCcy]} {formatRate(spot, pairStr)} {quoteCcy}</p>
                     </div>
