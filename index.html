@@ -534,7 +534,7 @@ const App = () => {
                 };
                 const tvRes = await fetch("https://scanner.tradingview.com/forex/scan", {
                     method: "POST",
-                    headers: { "Content-Type": "application/json" },
+                    headers: { "Content-Type": "text/plain" },
                     body: JSON.stringify(tvBody)
                 });
                 const tvData = await tvRes.json();
