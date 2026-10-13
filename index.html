@@ -70,10 +70,11 @@ const { useState, useEffect, useMemo, useCallback, useRef } = React;
 const CURRENCIES = ['EUR','USD','GBP','CHF','HUF','CZK','PLN','SEK','NOK','DKK','RON'];
 
 const DEFAULT_RATES = {
-    EUR: 2.50, USD: 4.00, GBP: 4.25, CHF: 1.25,
-    HUF: 6.50, CZK: 3.75, PLN: 5.75, SEK: 2.50,
-    NOK: 4.00, DKK: 2.85, RON: 6.25
+    EUR: 2.50, USD: 4.00, GBP: 3.75, CHF: 0.00,
+    HUF: 4.50, CZK: 2.75, PLN: 3.25, SEK: 1.75,
+    NOK: 4.50, DKK: 2.10, RON: 5.50
 };
+const RATES_VERSION = 'v2_deposit_rates';
 
 const CCY_FLAGS = {
     EUR:'🇪🇺', USD:'🇺🇸', GBP:'🇬🇧', CHF:'🇨🇭',
@@ -487,12 +488,21 @@ const App = () => {
     const [toast, setToast] = useState(null);
     const showToast = useCallback((msg) => setToast(msg), []);
 
-    // Interest rates
+    // Interest rates (Central Bank Deposit Facility Rates)
     const [rates, setRates] = useState(() => {
+        const savedVersion = localStorage.getItem('fx-rates-version');
         const saved = localStorage.getItem('fx-rates');
-        return saved ? JSON.parse(saved) : { ...DEFAULT_RATES };
+        if (saved && savedVersion === RATES_VERSION) {
+            return JSON.parse(saved);
+        }
+        localStorage.setItem('fx-rates-version', RATES_VERSION);
+        localStorage.setItem('fx-rates', JSON.stringify(DEFAULT_RATES));
+        return { ...DEFAULT_RATES };
     });
-    useEffect(() => { localStorage.setItem('fx-rates', JSON.stringify(rates)); }, [rates]);
+    useEffect(() => { 
+        localStorage.setItem('fx-rates', JSON.stringify(rates));
+        localStorage.setItem('fx-rates-version', RATES_VERSION);
+    }, [rates]);
 
     const [showRates, setShowRates] = useState(false);
 
