@@ -289,15 +289,86 @@ const daysBetween = (d1, d2) => {
     return Math.round((b - a) / 86400000);
 };
 
+const toLocalDateStr = (date) => {
+    const y = date.getFullYear();
+    const m = String(date.getMonth() + 1).padStart(2, '0');
+    const d = String(date.getDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
+};
+
 const today = () => {
-    const d = new Date();
-    return d.toISOString().split('T')[0];
+    return toLocalDateStr(new Date());
+};
+
+// Calendrier interbancaire TARGET2 / jours fériés FX majeurs
+const isTargetHoliday = (date) => {
+    const y = date.getFullYear();
+    const m = date.getMonth(); // 0-indexed
+    const d = date.getDate();
+
+    // 1er Janvier (New Year)
+    if (m === 0 && d === 1) return true;
+    // 1er Mai (Labour Day)
+    if (m === 4 && d === 1) return true;
+    // 25 Décembre (Christmas)
+    if (m === 11 && d === 25) return true;
+    // 26 Décembre (Boxing Day)
+    if (m === 11 && d === 26) return true;
+
+    // Calcul de Pâques (Algorithme de Butcher / Meeus)
+    const a = y % 19;
+    const b = Math.floor(y / 100);
+    const c = y % 100;
+    const e = Math.floor(b / 4);
+    const f = b % 4;
+    const g = Math.floor((b + 8) / 25);
+    const h = Math.floor((b - g + 1) / 3);
+    const i = (19 * a + b - e - h + 15) % 30;
+    const k = Math.floor(c / 4);
+    const l = c % 4;
+    const p = (32 + 2 * f + 2 * k - i - l) % 7;
+    const q = Math.floor((a + 11 * i + 22 * p) / 451);
+    const easterMonth = Math.floor((i + p - 7 * q + 114) / 31) - 1; // 0-indexed (March=2, April=3)
+    const easterDay = ((i + p - 7 * q + 114) % 31) + 1;
+
+    const easter = new Date(y, easterMonth, easterDay);
+    
+    // Good Friday (Vendredi Saint = Pâques - 2 jours)
+    const goodFriday = new Date(easter);
+    goodFriday.setDate(easter.getDate() - 2);
+    if (m === goodFriday.getMonth() && d === goodFriday.getDate()) return true;
+
+    // Easter Monday (Lundi de Pâques = Pâques + 1 jour)
+    const easterMonday = new Date(easter);
+    easterMonday.setDate(easter.getDate() + 1);
+    if (m === easterMonday.getMonth() && d === easterMonday.getDate()) return true;
+
+    return false;
+};
+
+// Prochain jour ouvré (hors samedi, dimanche et jours fériés interbancaires)
+const getNextBusinessDay = (startDate) => {
+    const cur = new Date(startDate);
+    cur.setHours(0, 0, 0, 0);
+    while (true) {
+        cur.setDate(cur.getDate() + 1);
+        const dayOfWeek = cur.getDay(); // 0 = Dimanche, 6 = Samedi
+        if (dayOfWeek !== 0 && dayOfWeek !== 6 && !isTargetHoliday(cur)) {
+            return toLocalDateStr(cur);
+        }
+    }
+};
+
+const addYears = (dateStr, years = 1) => {
+    const d = new Date(dateStr);
+    d.setFullYear(d.getFullYear() + years);
+    return toLocalDateStr(d);
 };
 
 const addMonths = (dateStr, months) => {
     const d = new Date(dateStr);
     d.setMonth(d.getMonth() + months);
-    return d.toISOString().split('T')[0];
+    return toLocalDateStr(d);
 };
 
 const formatNumber = (n, decimals = 2) => {
@@ -535,10 +606,13 @@ const App = () => {
     const [marginTrigger, setMarginTrigger] = useState(5);
 
     const todayStr = today();
+    const defaultStartDate = getNextBusinessDay(todayStr);
+    const defaultEndDate = addYears(todayStr, 1);
+
     const createDefaultTranche = (index = 0) => ({
         id: Date.now() + Math.random(),
-        startDate: addMonths(todayStr, 1 + index),
-        endDate: addMonths(todayStr, 2 + index),
+        startDate: defaultStartDate,
+        endDate: defaultEndDate,
         direction: 'buy',
         notional: 100000,
     });
@@ -694,8 +768,8 @@ const App = () => {
         const last = tranches[tranches.length - 1];
         const newTr = {
             id: Date.now() + Math.random(),
-            startDate: last ? last.endDate : addMonths(todayStr, 1),
-            endDate: last ? addMonths(last.endDate, 1) : addMonths(todayStr, 2),
+            startDate: last ? last.endDate : defaultStartDate,
+            endDate: last ? addYears(last.endDate, 1) : defaultEndDate,
             direction: last ? last.direction : 'buy',
             notional: last ? last.notional : 100000,
         };
