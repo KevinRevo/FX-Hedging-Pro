@@ -329,27 +329,45 @@ const calcFeePoints = (spot, feePercent) => {
 };
 
 const calcForwardRate = (spot, rateBase, rateQuote, daysStart, daysEnd, feePercent, direction) => {
-    const pts1 = calcForwardPoints(spot, rateBase, rateQuote, daysStart);
-    const pts2 = calcForwardPoints(spot, rateBase, rateQuote, daysEnd);
+    // Différentiel de taux : rQuote - rBase
+    // Exemples :
+    // - EUR/USD (rEUR = 2.5%, rUSD = 4.0%) : rBase < rQuote (diff > 0).
+    //   En Vente EUR / Achat USD (direction === 'buy') :
+    //   Le forward rate théorique augmente avec le temps (S * (1 + rq*d)/(1 + rb*d)).
+    //   La banque retient le taux le plus défavorable pour le client sur la fenêtre [Start, End].
+    //   Comme le taux monte avec le temps, le plus défavorable (le plus bas) est à Date Début !
+    //   Plus la date de début est lointaine, plus le taux est bonifié. La date de fin n'a aucun impact.
+    // - USD/EUR (rUSD = 4.0%, rEUR = 2.5%) : rBase > rQuote (diff < 0).
+    //   Le forward rate baisse avec le temps.
+    //   La banque retient le pire taux sur [Start, End], qui est à Date Fin !
+    //   Plus la date de fin est lointaine, plus le taux baisse (se dégrade). La date de début n'a aucun impact.
     
-    // Logique Corporate Hedging : 'buy' (Achat) signifie généralement Achat de la devise étrangère (Quote) 
-    // et Vente de la devise de base. 
-    // Si le client vend la devise de base, la banque veut donner le MOINS de Quote possible (taux le plus bas).
     const clientBuysQuote = direction === 'buy';
     
-    const fwdPts = clientBuysQuote ? Math.min(pts1, pts2) : Math.max(pts1, pts2);
-    
+    // Détermination de la date de référence (pricingDays) selon la règle bancaire du pire cas :
+    let pricingDays;
+    if (rateQuote >= rateBase) {
+        // Points de base > 0 (taux monte avec le temps)
+        // Client achète Quote : pire taux = le plus bas = Date Début
+        // Client vend Quote : pire taux = le plus haut = Date Fin
+        pricingDays = clientBuysQuote ? daysStart : daysEnd;
+    } else {
+        // Points de base < 0 (taux descend avec le temps)
+        // Client achète Quote : pire taux = le plus bas = Date Fin
+        // Client vend Quote : pire taux = le plus haut = Date Début
+        pricingDays = clientBuysQuote ? daysEnd : daysStart;
+    }
+
+    const fwdPts = calcForwardPoints(spot, rateBase, rateQuote, pricingDays);
     const feePts = calcFeePoints(spot, feePercent);
-    // Si client achète Quote (vend Base), il reçoit moins -> on soustrait les frais.
-    // Si client vend Quote (achète Base), il paie plus -> on ajoute les frais.
     const feeAdj = clientBuysQuote ? -feePts : feePts;
-    
+
     return {
         forwardPoints: fwdPts,
         feePoints: feePts,
         forwardRate: spot + fwdPts + feeAdj,
         totalPoints: fwdPts + feeAdj,
-        pricingDays: fwdPts === pts1 ? daysStart : daysEnd
+        pricingDays: pricingDays
     };
 };
 
